@@ -12,20 +12,10 @@ import { flowLead } from "~/flows/lead.flow"
 const USER_DATABASE = [
   {
     phone: "519120038190",
-    empresa: "Proveedy Sac",
-    name: "Jesus Alvarez",
-    area: "Logística",
-    fecha: "2025-09-15",
-    hora_recogo: "08:00",
-    origen_contacto: "Juan Pérez",
-    origen_direccion: "Av. La Marina 123, San Miguel",
-    destino_direccion: "Aeropuerto Jorge Chávez",
-    motivo_traslado: "Viaje de negocios",
-    tipo_unidad_requerida: "Van",
-    observaciones: "Requiere factura",
-    aeropuerto_vuelo: "LATAM123",
-    aeropuerto_contacto: "Roxana Pérez",
-    tarifa: 80
+    full_name: "Antony Espinoza",
+    date: "17/10/2025",
+    time: "14:00",
+    email: "elmer.antony12@gmail.com",
   }
 ]
 

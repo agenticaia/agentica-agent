@@ -11,7 +11,7 @@ ${getFullCurrentDate()}
 
 # Opciones posibles (elige SOLO UNA)
 - TALK: Usuario conocido.
-- LEAD: Usuario desconocido que solicita traslado.
+- LEAD: Usuario desconocido.
 
 # Historial de conversación
 --------------

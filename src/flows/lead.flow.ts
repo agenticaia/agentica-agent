@@ -1,10 +1,18 @@
 import { addKeyword, EVENTS } from "@builderbot/bot"
+import { config } from "~/config"
 import { BotState, IConfirmedData } from "~/types/bot"
 import AIClass from "~/services/ai"
+import { HubSpotClass } from "~/services/hubspot"
 import { getFullCurrentDate } from "~/utils/currentDate"
 import { generateTimer } from "~/utils/generateTimer"
 import { getHistoryAsLLMMessages, getHistoryParse, handleHistory } from "~/utils/handleHistory"
 import { safeJSONParse } from "~/utils/safeJSONParse"
+import { appToCalendar } from "~/services/calendar"
+
+const hubspot = new HubSpotClass({
+    token: config.hubspotToken!,
+    endpoint: config.hubspotEndpoint!,
+})
 
 const generateServiceId = () => {
     const randomNum = Math.floor(1000 + Math.random() * 9000) // 4 dígitos
@@ -60,9 +68,9 @@ const generatePrompt = (history: string, parsed: any = null) => {
         # Rol
         Eres un agente virtual de *AGENTICA* 💼, una empresa de marketing digital y automatización.
         Tu objetivo es brindar información básica, agendar citas y confirmar datos del cliente.
-        Tono: profesional, cercano y amable, adaptado a WhatsApp. Usa emojis de forma natural.
+        Tono: profesional pero humano, adaptado al estilo de WhatsApp. Usa emojis de manera natural.
 
-        # Fecha actual
+        # Fecha de hoy
         ${nowDate}
 
         # Servicios destacados
@@ -71,18 +79,25 @@ const generatePrompt = (history: string, parsed: any = null) => {
         - Gestión de campañas y redes sociales 📱  
         - Diseño web y branding 💡
 
-        # Datos actuales (JSON PARSED)
+        # Datos ya procesados (JSON PARSED)
         ${JSON.stringify(parsed ?? {}, null, 2)}
 
-        # Flujo de atención
+        # Flujo de atención (dinámico)
+        Antes de preguntar, revisa el JSON \`parsed\`. Si un campo está completo y válido, no lo preguntes.
+        Sigue las preguntas en el orden lógico hasta completar los 8 campos obligatorios.
+
         ${flujos}
 
-        # Validaciones
+        # Validaciones generales
         - Fecha: convertir a DD/MM/YYYY.
-        - Hora: convertir a HH:MM 24h.
+        - Hora: convertir a HH:MM (24h).
         - Correo: validar formato estándar.
-        - Si ya existe un campo válido en parsed, no volver a preguntar.
+        - Si el usuario da múltiples datos en un solo mensaje, extrae y llena todos los campos que corresponden.
+        - No inventes valores.
         - Usa siempre español.
+
+        # Restricciones
+        1. No responder fuera del contexto asignado al agente.
 
         # Confirmación final
         Cuando todos los campos estén completos, muestra el resumen así:
@@ -93,14 +108,7 @@ const generatePrompt = (history: string, parsed: any = null) => {
         - *Hora:* [hora_cita]
         - *Correo:* [correo]
 
-        Luego pregunta:
-        "¿Deseas confirmar tu cita con AGENTICA? Responde *Sí ✅* o *No ❌*."
-
-        Si responde *Sí*: confirma con  
-        "¡Perfecto! 🎉 Tu cita quedó registrada. Te enviaremos la información por correo."
-
-        Si responde *No*:  
-        "Entiendo 😊. Si deseas más información sobre nuestros servicios, estaré aquí para ayudarte."
+        ¡Perfecto! 🎉 Tu cita quedó registrada. Te enviaremos la información por correo.
 
         # Historial de conversación
         --------------
@@ -144,13 +152,12 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
                     HISTORIAL_CONFIRMADO:
                     ${JSON.stringify(getHistoryAsLLMMessages(state as BotState))}
 
-                    FORMATO JSON:
+                    FORMATO JSON (con comentarios de referencia a columnas de Google Sheets):
                     {
                         "nombre_completo": string | null,       // [nombre_completo] nombre del cliente
                         "fecha_cita": string | null,            // [fecha_cita] en formato DD/MM/YYYY
                         "hora_cita": string | null,             // [hora_cita] en formato HH:MM (24h)
                         "correo": string | null,                // [correo] correo válido del cliente
-                        "confirmacion": string | null           // ["si" | "no"] después de enviar el resumen completo de la cita, según la confirmación del correo
                     }
 
                     ─────────────────────────────
@@ -161,10 +168,6 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
                         - No devuelvas expresiones relativas.
                     - "hora_cita":
                         - Convierte a HH:MM (24h).
-                    - "confirmacion":
-                        - Solo se llena si la IA ya mostró el resumen completo todos los campos.
-                        - Si el usuario respondió afirmativamente → "si".
-                        - Si respondió negativamente o quiere modificar algo → "no".
                 `
                 return await ai.createChat([{ role: 'system', content: retryPrompt }])
             }, 
@@ -178,7 +181,6 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
             date: parsed.fecha_cita ?? null,
             time: parsed.hora_cita ?? null,
             email: parsed.correo ?? null,
-            confirmation_response: parsed.confirmacion ?? null
         }
         
         for (const key in data) {
@@ -206,13 +208,26 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
             console.log("🎯 Todos los campos fueron completados correctamente.")
             console.log(data)
 
-            if (data.confirmation_response === "si") {
-                await state.update({ confirmed: true, dataLogged: true })
-                console.log("✅ Confirmación final recibida: el usuario aceptó la cita por correo.")
-            } else if (data.confirmation_response === "no") {
-                console.log("El usuario rechazó la cita o quiere modificarla.")
-                await state.update({ confirmed: false, dataLogged: false, confirmedData: createConfirmedData(ctx.from) })
+            const payload = {
+                phone: ctx.from ?? "-",
+                name: confirmedData.full_name ?? "-",
+                date: confirmedData.date ?? "-",
+                time: confirmedData.time ?? "-",
+                email: data.email ?? "-",
             }
+
+            await state.update({ dataLogged: true })
+            await appToCalendar(payload)
+
+            setTimeout(async () => {
+                await hubspot.update({
+                    phone: ctx.from,
+                    updates: {
+                        firstname: payload.name,
+                        email: data.email
+                    }
+                })
+            })
         }
 
         const prompt = generatePrompt(history, parsed)

@@ -1,4 +1,11 @@
+import { globalFlags } from "~/core/globals"
 import { config } from "../../config"
+import { HubSpotClass } from "../hubspot"
+
+const hubspot = new HubSpotClass({
+    token: config.hubspotToken!,
+    endpoint: config.hubspotEndpoint!,
+})
 
 const handlerMessage = async (dataIn: any, chatwoot: any) => {
     const inbox = await chatwoot.findOrCreateInbox({ name: `${config.inboxName}` })
@@ -15,14 +22,43 @@ const handlerMessage = async (dataIn: any, chatwoot: any) => {
     })
 
     let ownerName = ""
+    let hubspotOwnerId: string | undefined
 
     if (isNew) {
-        const agent = await chatwoot.getNextAgent()
+        const hubspotContact = await hubspot.searchContactByPhone(dataIn.phone)
 
-        ownerName = agent?.name
+        if (hubspotContact && hubspotContact.properties?.hubspot_owner_id) {
+            hubspotOwnerId = hubspotContact.properties.hubspot_owner_id
 
-        await chatwoot.assignAgentToConversation(conversation.id, agent.id)
-        // console.log("🟢 Asignado agente:", agent.email)
+            const owners = await hubspot.getOwners()
+            const matchedOwner = owners.find((o: any) => o.id === hubspotOwnerId)
+
+            if (matchedOwner) {
+                ownerName = `${matchedOwner.firstName} ${matchedOwner.lastName}`
+
+                const agents = await chatwoot.getAgents()
+                const matchedAgent = agents.find((a: any) => a.email === matchedOwner.email)
+
+                if (matchedAgent) {
+                    await chatwoot.assignAgentToConversation(conversation.id, matchedAgent.id)
+                    // console.log("🟢 Asignado agente:", matchedOwner.email)
+                }
+            }
+        } else {
+            const agent = await chatwoot.getNextAgent()
+            const agentEmail = agent.email
+    
+            const owners = await hubspot.getOwners()
+            const matchedOwner = owners.find((owner: any) => owner.email === agentEmail)
+    
+            ownerName = agent?.name
+            hubspotOwnerId = matchedOwner?.id
+    
+            await chatwoot.assignAgentToConversation(conversation.id, agent.id)
+            // console.log("🟢 Asignado agente:", matchedOwner.email)
+        }
+
+        globalFlags.hubspotOwnerId = hubspotOwnerId
     }
 
     await chatwoot.createMessage({
@@ -32,7 +68,7 @@ const handlerMessage = async (dataIn: any, chatwoot: any) => {
         attachment: dataIn.attachment,
     })
 
-    return { ownerName }
+    return { ownerName, hubspotOwnerId }
 }
 
 export { handlerMessage }

@@ -10,11 +10,17 @@ import { getMessageParts } from './utils/getMessageParts'
 import { MetaProvider as Provider } from '@builderbot/provider-meta'
 import { handlerMessage } from './services/chatwoot'
 import { ChatwootClass } from './services/chatwoot/chatwoot.class'
+import { HubSpotClass } from './services/hubspot'
  
 const chatwoot = new ChatwootClass({
     account: config.chatwootAccountID,
     token: config.chatwootToken,
     endpoint: config.chatwootEndpoint,
+})
+
+const hubspot = new HubSpotClass({
+    token: config.hubspotToken!,
+    endpoint: config.hubspotEndpoint!,
 })
 
 const adapterProvider = createProvider(Provider, {
@@ -45,21 +51,6 @@ const main = async () => {
     )
 
     const { handleCtx, httpServer } = bot
-
-    // const adapterFlow = createFlow([welcomeFlow])
-    // const adapterProvider = createProvider(Provider, {
-    //     jwtToken: config.jwtToken,
-    //     numberId: config.numberId,
-    //     verifyToken: config.verifyToken,
-    //     version: config.version
-    // })
-    // const adapterDB = new MemoryDB()
-
-    // const { handleCtx, httpServer } = await createBot({
-    //     flow: adapterFlow,
-    //     provider: adapterProvider,
-    //     database: adapterDB,
-    // })
 
     new ServerHttp(adapterProvider, bot)
 
@@ -144,16 +135,22 @@ const main = async () => {
 
                 // console.log(attachments)
 
-                // const agentData = await handlerMessage(
-                //     {
-                //         phone: payload.from,
-                //         name: payload.pushName,
-                //         message: text,
-                //         mode: "incoming",
-                //         attachment: attachments,
-                //     },
-                //     chatwoot
-                // )
+                const agentData = await handlerMessage(
+                    {
+                        phone: payload.from,
+                        name: payload.pushName,
+                        message: text,
+                        mode: "incoming",
+                        attachment: attachments,
+                    },
+                    chatwoot
+                )
+
+                await hubspot.create({
+                    name: payload.pushName,
+                    phone: payload.from,
+                    hubspot_owner_id: agentData?.hubspotOwnerId ?? ""
+                })
             } catch (error) {
                 console.log("ERROR", error)
             }
