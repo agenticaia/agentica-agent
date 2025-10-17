@@ -6,7 +6,7 @@ export const config = {
     jwtToken: process.env.JWT_TOKEN ?? "",
     numberId: process.env.NUMBER_ID ?? "",
     verifyToken: process.env.VERIFY_TOKEN ?? "",
-    version: "v23.0",
+    version: "v24.0",
     // AT
     Model: process.env.OPENAI_MODEL,
     ApiKey: process.env.OPENAI_API_KEY,
