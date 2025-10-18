@@ -58,8 +58,7 @@ export type FlowHandler = (
 export interface IConfirmedData {
     id: string | null;
     full_name: string | null,
-    date: string | null,
-    time: string | null,
+    startDate: string | null,
     email: string | null,
     phone: string | null;
 }

@@ -49,7 +49,7 @@ export function scheduleReminders(
 
             cancelReminders(key, state)
             await state.update?.({ finished: true, remindersActive: false })
-            await endFlow("💬 Gracias por escribirnos 🙏. Una 👩‍💼 *asesora* te atenderá pronto. ⏰ Horario: *8:00 AM - 6:30 PM*")
+            await endFlow("💬 Gracias por escribirnos 🙏. Un 👩‍💼 *asesor* te atenderá pronto. ⏰ Horario: *8:00 AM - 6:30 PM*")
         } catch (e) {
             console.error("[reminder 15m] error:", e)
         }

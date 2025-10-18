@@ -5,9 +5,9 @@ import AIClass from "~/services/ai"
 import { logInfo, logWarn } from "~/utils/logger"
 import { cancelReminders, scheduleReminders } from "~/utils/scheduleReminders"
 import { globalFlags } from "~/core/globals"
-import { flowQuote } from "~/flows/quote.flow"
 import { flowTalk } from "~/flows/talk.flow"
 import { flowLead } from "~/flows/lead.flow"
+import { flowSeller } from "~/flows/seller.flow"
 
 const USER_DATABASE = [
   {
@@ -52,10 +52,12 @@ export default async (ctx: BotContext, { state, gotoFlow, extensions, flowDynami
     logInfo("AI_RESPONSE", label)
 
     switch (label) {
-        case "TALK":
+        case "CHARLA":
             return gotoFlow(flowTalk)
-        case "LEAD":
+        case "AGENDAR":
             return gotoFlow(flowLead)
+        case "HABLAR":
+            return gotoFlow(flowSeller)
         default:
             logWarn("AI_CLASSIFIER", `Etiqueta inesperada: ${label}`)
             scheduleReminders(ctx, state, flowDynamic, endFlow)

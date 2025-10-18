@@ -3,11 +3,12 @@ import { config } from "~/config"
 import { BotState, IConfirmedData } from "~/types/bot"
 import AIClass from "~/services/ai"
 import { HubSpotClass } from "~/services/hubspot"
-import { getFullCurrentDate } from "~/utils/currentDate"
+import { getFullCurrentDate, parseRelativeDate } from "~/utils/currentDate"
 import { generateTimer } from "~/utils/generateTimer"
 import { getHistoryAsLLMMessages, getHistoryParse, handleHistory } from "~/utils/handleHistory"
 import { safeJSONParse } from "~/utils/safeJSONParse"
 import { appToCalendar } from "~/services/calendar"
+import { scheduleReminders } from "~/utils/scheduleReminders"
 
 const hubspot = new HubSpotClass({
     token: config.hubspotToken!,
@@ -22,87 +23,68 @@ const generateServiceId = () => {
 const generatePrompt = (history: string, parsed: any = null) => {
     const nowDate = getFullCurrentDate()
 
+    const parsedReadable = `
+        # Dato del Usuario (JSON API)
+        ${JSON.stringify(parsed ?? {}, null, 2)}
+    `
+
     // Etiquetas legibles para mostrar al usuario
     const fieldLabels: Record<string, string> = {
-        nombre_completo: "Tengo registrado el *nombre completo* del cliente",
-        fecha_cita: "Ya cuento con la *fecha agendada* para la cita",
-        hora_cita: "La *hora de la cita* ya está confirmada",
-        correo: "Tengo anotado el *correo electrónico* del cliente"
+        nombre_completo: "Perfecto, ya tengo tu *nombre completo*",
+        fecha_cita: "Anoté la *fecha de tu cita*",
+        hora_cita: "Listo, ya tengo la *hora confirmada*",
+        correo: "Genial, registré tu *correo electrónico*"
     }
 
     // Config dinámico de campos
     const fieldsConfig = [
-        {
-            key: "nombre_completo",
-            path: parsed?.nombre_completo,
-            question: "¿Podrías decirme tu nombre completo, por favor? 😊",
-            validation: "Texto (solo letras y espacios, sin números)."
+        { key: "nombre_completo", path: parsed?.nombre_completo, question: "¿Podrías decirme tu nombre completo, por favor? 😊", validation: "Solo texto, sin números ni caracteres especiales."
         },
-        {
-            key: "fecha_cita",
-            path: parsed?.fecha_cita,
-            question: "¿Para qué fecha te gustaría agendar la cita? 📅",
-            validation: "Aceptar lenguaje natural y convertir a DD/MM/YYYY."
+        { key: "fecha_cita", path: parsed?.fecha_cita, question: "¿Para qué fecha te gustaría agendar la cita? 📅", validation: "Aceptar lenguaje natural y convertir a formato DD/MM/YYYY."
         },
-        {
-            key: "hora_cita",
-            path: parsed?.hora_cita,
-            question: "¿A qué hora te gustaría agendar la cita? ⏰",
-            validation: "Convertir a formato HH:MM (24h)."
+        { key: "hora_cita", path: parsed?.hora_cita, question: "¿A qué hora te gustaría agendar la cita? ⏰", validation: "Convertir a formato HH:MM (24h)."
         },
-        {
-            key: "correo",
-            path: parsed?.correo,
-            question: "Por último, ¿me confirmas tu correo electrónico? 📧",
-            validation: "Debe contener '@' y un dominio válido."
+        { key: "correo", path: parsed?.correo, question: "Por último, ¿me confirmas tu correo electrónico? 📧", validation: "Debe contener '@' y un dominio válido (ejemplo@correo.com)."
         }
     ]
 
     // Construye flujos dinámicos
     const flujos = fieldsConfig.map(f => {
-        const label = fieldLabels[f.key] ?? `Ya tengo el dato de *${f.key}*`
+        const label = fieldLabels[f.key] ?? `Ya tengo registrado el dato de *${f.key}*`
         return f.path ? `✅ ${label}: *${f.path}*` : `❓ ${f.question}`
     }).join("\n\n")
 
+    // Validaciones dinámicos
+    const validationRules = fieldsConfig.map(f => `- ${f.key}: ${f.validation}`).join("\n")
+
     return `
         # Rol
-        Eres un agente virtual de *AGENTICA* 💼, una empresa de marketing digital y automatización.
-        Tu objetivo es brindar información básica, agendar citas y confirmar datos del cliente.
+        Eres un agente especializado en atención al cliente 💼✨ para una empresa de Agentica AI.
         Tono: profesional pero humano, adaptado al estilo de WhatsApp. Usa emojis de manera natural.
 
         # Fecha de hoy
         ${nowDate}
 
-        # Servicios destacados
-        - Estrategias de Marketing Digital 📈  
-        - Automatización con IA 🤖  
-        - Gestión de campañas y redes sociales 📱  
-        - Diseño web y branding 💡
-
-        # Datos ya procesados (JSON PARSED)
-        ${JSON.stringify(parsed ?? {}, null, 2)}
+        # Datos procesados (JSON DATA)
+        ${parsedReadable}
 
         # Flujo de atención (dinámico)
-        Antes de preguntar, revisa el JSON \`parsed\`. Si un campo está completo y válido, no lo preguntes.
-        Sigue las preguntas en el orden lógico hasta completar los 8 campos obligatorios.
+        Revisa cada campo en orden y pregunta solo los que falten.
+        Sigue el orden en que se listan a continuación:
 
         ${flujos}
 
         # Validaciones generales
-        - Fecha: convertir a DD/MM/YYYY.
-        - Hora: convertir a HH:MM (24h).
-        - Correo: validar formato estándar.
-        - Si el usuario da múltiples datos en un solo mensaje, extrae y llena todos los campos que corresponden.
-        - No inventes valores.
-        - Usa siempre español.
+        ${validationRules}
 
         # Restricciones
-        1. No responder fuera del contexto asignado al agente.
+        1. No responder fuera del contexto.
+        2. No inventes valores.
+        3. Usa respuestas variadas y naturales (no repitas la misma pregunta textualmente).
+        4. Usa siempre español.
 
         # Confirmación final
-        Cuando todos los campos estén completos, muestra el resumen así:
-
-        📋✨ *Resumen de cita:*
+        📋✨ Resumiendo tus datos:
         - *Nombre:* [nombre_completo]
         - *Fecha:* [fecha_cita]
         - *Hora:* [hora_cita]
@@ -122,14 +104,15 @@ const generatePrompt = (history: string, parsed: any = null) => {
 const createConfirmedData = (phone: string): IConfirmedData => ({
     id: generateServiceId(),
     full_name: null,
-    date: null,
-    time: null,
+    startDate: null,
     email: null,
     phone
 })
 
-export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state, flowDynamic, extensions }) => {
+export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state, flowDynamic, extensions, endFlow }) => {
     try {
+        scheduleReminders(ctx, state, flowDynamic, endFlow)
+
         const ai = extensions.ai as AIClass
         const history = getHistoryParse(state as BotState)
 
@@ -142,44 +125,46 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
         const parsed = await safeJSONParse(
             async () => {
                 const retryPrompt = `
-                    Hoy es: ${getFullCurrentDate()}
+                    # Fecha actual: 
+                    ${getFullCurrentDate()}
 
-                    Tarea: Lee el HISTORIAL_DE_CONVERSACION y devuelve SOLO un JSON con los campos definidos. 
+                    # Tarea
+                    Lee el HISTORIAL_DE_CONVERSACION y devuelve SOLO un JSON con los campos definidos. 
                     - Si un campo no aparece o es inválido, devuélvelo como null.
-                    - Usa solo datos confirmados por la IA.
+                    - Usa solo datos confirmados por el usuario.
                     - No incluyas explicaciones fuera del JSON.
 
-                    HISTORIAL_CONFIRMADO:
+                    # HISTORIAL_CONFIRMADO:
                     ${JSON.stringify(getHistoryAsLLMMessages(state as BotState))}
 
-                    FORMATO JSON (con comentarios de referencia a columnas de Google Sheets):
+                    # FORMATO JSON:
                     {
                         "nombre_completo": string | null,       // [nombre_completo] nombre del cliente
-                        "fecha_cita": string | null,            // [fecha_cita] en formato DD/MM/YYYY
+                        "fecha_cita": string | null,            // texto tal cual dijo el usuario, ej: "este lunes"
                         "hora_cita": string | null,             // [hora_cita] en formato HH:MM (24h)
                         "correo": string | null,                // [correo] correo válido del cliente
                     }
 
                     ─────────────────────────────
-                    REGLAS DE NEGOCIO:
+                    # REGLAS DE NEGOCIO:
                     - Usa solo los datos confirmados por el usuario.
-                    - "fecha_cita":
-                        - Convierte siempre expresiones relativas ("mañana", "este viernes", etc.) a formato DD/MM/YYYY.
-                        - No devuelvas expresiones relativas.
-                    - "hora_cita":
-                        - Convierte a HH:MM (24h).
                 `
                 return await ai.createChat([{ role: 'system', content: retryPrompt }])
             }, 
             1000
         )
+        
+        if (parsed && parsed.fecha_cita) {
+            const currentDate = new Date()
+            const formattedDate = parseRelativeDate(parsed.fecha_cita, currentDate)
+            if (formattedDate) parsed.fecha_cita = formattedDate
+        }
 
         const data = {
             id: confirmedData.id,
             phone: ctx.from,
             full_name: parsed.nombre_completo ?? null,
-            date: parsed.fecha_cita ?? null,
-            time: parsed.hora_cita ?? null,
+            startDate: parsed.fecha_cita && parsed.hora_cita ? `${parsed.fecha_cita} ${parsed.hora_cita}` : null,
             email: parsed.correo ?? null,
         }
         
@@ -196,8 +181,7 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
         
         const requiredFields = [
             data.full_name,
-            data.date,
-            data.time,
+            data.startDate,
             data.email
         ]
         
@@ -209,10 +193,10 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
             console.log(data)
 
             const payload = {
+                id: data.id ?? "-",
                 phone: ctx.from ?? "-",
                 name: confirmedData.full_name ?? "-",
-                date: confirmedData.date ?? "-",
-                time: confirmedData.time ?? "-",
+                startDate: confirmedData.startDate ?? "-",
                 email: data.email ?? "-",
             }
 
@@ -255,7 +239,7 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
             }
         }
     } catch (err) {
-        console.log(`[ERROR]:`, err)
+        console.log(`[ERROR LEAD FLOW]:`, err)
         return
     }
 })

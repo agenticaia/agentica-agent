@@ -1,21 +1,28 @@
 import { getFullCurrentDate } from "~/utils/currentDate"
 
-export const CLASSIFIER_PROMPT = (history: string, userExists: boolean) => `
-Eres un clasificador de conversaciones.  
-Analiza el historial y responde SOLO con la etiqueta del flujo correspondiente, sin explicaciones, sin observaciones, sin texto adicional.
+export const CLASSIFIER_PROMPT = (history: string, userExists: boolean): string => {
+    const nowDate = getFullCurrentDate()
 
-# Fecha de hoy
-${getFullCurrentDate()}
+    return `
+        Eres un clasificador de conversaciones.  
+        Analiza el historial y responde SOLO con la etiqueta del flujo correspondiente, sin explicaciones, sin observaciones, sin texto adicional.
 
-# Estado del usuario: ${userExists ? 'conocido' : 'desconocido'}
+        # Fecha actual
+        ${nowDate}
 
-# Opciones posibles (elige SOLO UNA)
-- TALK: Usuario conocido.
-- LEAD: Usuario desconocido.
+        # Estado del usuario
+        El usuario es ${userExists ? 'CONOCIDO (ya registrado)' : 'DESCONOCIDO (nuevo)'}
 
-# Historial de conversación
---------------
-${history}
---------------
+        # Opciones posibles (elige SOLO UNA)
+        - CHARLA: El usuario conocido mantiene una charla general o seguimiento sin pedir información ni agendar nada.
+        - AGENDAR: El usuario desconocido quiere registrar, agendar, reservar o solicitar una DEMO o cita.
+        - HABLAR: El usuario (conocido o desconocido) pide información, hace preguntas o solicita detalles sobre productos o servicios.
 
-Respuesta ideal (TALK|LEAD):`
+        # Historial de conversación
+        --------------
+        ${history}
+        --------------
+
+        Respuesta ideal (CHARLA|AGENDAR|HABLAR):
+    `
+}
