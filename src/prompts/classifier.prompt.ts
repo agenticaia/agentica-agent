@@ -14,7 +14,6 @@ export const CLASSIFIER_PROMPT = (history: string, userExists: boolean): string 
         El usuario es ${userExists ? 'CONOCIDO (ya registrado)' : 'DESCONOCIDO (nuevo)'}
 
         # Opciones posibles (elige SOLO UNA)
-        - CHARLA: El usuario 'CONOCIDO'.
         - AGENDAR: El usuario desconocido quiere registrar, agendar, reservar o solicitar una DEMO o cita.
         - HABLAR: El usuario (conocido o desconocido) pide información, hace preguntas o solicita detalles sobre productos o servicios.
 
@@ -23,6 +22,8 @@ export const CLASSIFIER_PROMPT = (history: string, userExists: boolean): string 
         ${history}
         --------------
 
-        Respuesta ideal (CHARLA|AGENDAR|HABLAR):
+        Respuesta ideal (AGENDAR|HABLAR):
     `
 }
+
+//  - CHARLA: El usuario 'CONOCIDO'.

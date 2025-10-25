@@ -148,23 +148,22 @@ const generatePrompt = (history: string, parsed: any = null) => {
     ]
 
     // Construye flujos dinámicos
+    // const flujos = fieldsConfig.map(f => {
+    //     const label = fieldLabels[f.key] ?? `Ya tengo registrado el dato de *${f.key}*`
+    //     if (f.key === "ocupacion" && f.path) return `✅ ${label}`
+    //     return f.path ? `✅ ${label}: *${f.path}*` : `❓ ${f.question}`
+    // }).join("\n\n")
     const flujos = fieldsConfig.map(f => {
         const label = fieldLabels[f.key] ?? `Ya tengo registrado el dato de *${f.key}*`
         if (f.key === "ocupacion" && f.path) return `✅ ${label}`
-        return f.path ? `✅ ${label}: *${f.path}*` : `❓ ${f.question}`
+        return f.path ? `✅ ${label}` : `❓ ${f.question}`
     }).join("\n\n")
-
-    // console.log(flujos)
 
     // Validaciones dinámicos
     const validationRules = fieldsConfig.map(f => `- ${f.key}: ${f.validation}`).join("\n")
 
     return `
         ${baseAgenticaPrompt}
-
-        # Contexto
-        Antes de empezar, saluda al usuario según la hora del día y ofrécele un *agente de IA de prueba gratuito*. Hazlo de forma natural y cercana, como una persona hablando por WhatsApp:
-        → Ejemplo: "¡Hola! 👋 ¡Buenos días! Te cuento que podemos darte un *agente de IA gratis de prueba* para que veas cómo funciona y te ayude con tus mensajes 😊."
 
         # Fecha de hoy
         ${nowDate}
@@ -253,8 +252,8 @@ export const flowLead = addKeyword(EVENTS.ACTION).addAction(async (ctx, { state,
                             "pregunta_5": string | null,    // [pregunta_5] respuesta del cliente
                             "pregunta_6": string | null     // [pregunta_6] respuesta del cliente
                         },
-                        "nombre_completo": string | null,   // [nombre_completo] nombre del cliente
-                        "cuenta_social": string | null,     // [cuenta_social] cuenta IG/Tiktok, agregando el signo @, ej:"@facebook"
+                        "nombre_completo": string | null,   // [nombre_completo] nombre del cliente ej: Juan Abarca
+                        "cuenta_social": string | null,     // [cuenta_social] cuenta IG/Tiktok, agregando el signo @, ej:"@facebook" de la respuesta del cliente
                         "fecha_cita": string | null,        // texto tal cual dijo el usuario, ej: "este lunes"
                         "hora_cita": string | null,         // [hora_cita] en formato HH:MM (24h)
                         "tipo_negocio": string | null       // [tipo_negocio] Moda, Belleza, Otros

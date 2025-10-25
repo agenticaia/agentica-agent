@@ -52,8 +52,8 @@ export default async (ctx: BotContext, { state, gotoFlow, extensions, flowDynami
     logInfo("AI_RESPONSE", label)
 
     switch (label) {
-        case "CHARLA":
-            return gotoFlow(flowTalk)
+        // case "CHARLA":
+            // return gotoFlow(flowTalk)
         case "AGENDAR":
             return gotoFlow(flowLead)
         case "HABLAR":
