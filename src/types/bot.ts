@@ -59,6 +59,5 @@ export interface IConfirmedData {
     id: string | null;
     full_name: string | null,
     startDate: string | null,
-    email: string | null,
     phone: string | null;
 }

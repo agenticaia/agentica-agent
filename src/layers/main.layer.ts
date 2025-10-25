@@ -42,7 +42,7 @@ export default async (ctx: BotContext, { state, gotoFlow, extensions, flowDynami
 
     let text = ""
     try {
-        text = await ai.createChat([{ role: "system", content: prompt }], "gpt-4.1-nano")
+        text = await ai.createChat([{ role: "system", content: prompt }])
     } catch (err) {
         console.error("Error en IA:", err)
     }
